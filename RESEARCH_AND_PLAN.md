@@ -196,7 +196,14 @@ Create a standalone Arduino sketch (`lunarsensor.ino`) that:
    - `POST /config` to set lux scaling factor, sensor mode (ambient vs white), polling rate.
    - Persist settings to NVS.
 
-3. **Home Assistant compatibility**
+3. **Battery status endpoint**
+   - The CodeCell library already samples the battery inside `Run()` and exposes `BatteryVoltageRead()` (mV, filtered), `BatteryLevelRead()` (percent), and `PowerStateRead()` (battery / USB / charging / full / low) — reading them adds no extra sensor traffic.
+   - Expose as `GET /sensor/battery_level` in the same JSON style as the light endpoint, e.g. `{"id":"sensor-battery_level","state":"87 %","value":87.0}`, with voltage and charge state as extra fields.
+   - Do **not** add battery events to the `/events` SSE stream — its framing is part of the Lunar protocol contract.
+   - **Limitation:** with the current synchronous single-client `WebServer`, the endpoint is unreachable while Lunar holds the SSE stream open (i.e. almost always). Making it reachable requires either servicing requests from inside the SSE handler loop or the async-server refactor. A low-battery serial log line / LED blink works regardless of this limitation.
+   - LiPo percentage is unreliable in the flat middle of the discharge curve; report voltage + charge state alongside the percent.
+
+4. **Home Assistant compatibility**
    - The official `lunarsensor` Python server doubles as a Home Assistant add-on.
    - Our ESP32 firmware could also expose a simple REST API or MQTT topic for HA, but this is out of scope for the primary Lunar integration.
 
@@ -237,4 +244,4 @@ lunar-sensor/
 3. ~~**Test endpoints** with `curl`.~~ ✅
 4. ~~**Pair with Lunar app** — verify Sensor Mode appears and lux values track correctly.~~ ✅
 5. **Calibrate** against a reference light meter or the official TSL2591 sensor.
-6. **Remaining Phase 2/3 items**: light sleep, watchdog, OTA updates, captive portal, config endpoint.
+6. **Remaining Phase 2/3 items**: light sleep, watchdog, OTA updates, captive portal, config endpoint, battery status endpoint.
