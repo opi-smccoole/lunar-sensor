@@ -1,0 +1,16 @@
+# Wi-Fi credentials
+src/secrets.h
+
+# PlatformIO
+.pio/
+
+# Build artifacts
+*.hex
+*.bin
+*.elf
+build/
+.vscode/
+
+# Local tool config
+.devin/
+.DS_Store
