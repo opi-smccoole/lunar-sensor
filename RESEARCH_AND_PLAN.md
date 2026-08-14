@@ -133,7 +133,7 @@ Important constraint: **ESP32-C3 only supports 2.4 GHz Wi-Fi**. Do not attempt t
 
 ## Implementation Plan
 
-### Phase 1: Proof-of-Concept Firmware
+### Phase 1: Proof-of-Concept Firmware ✅ (complete)
 
 Create a standalone Arduino sketch (`lunarsensor.ino`) that:
 
@@ -163,24 +163,25 @@ Create a standalone Arduino sketch (`lunarsensor.ino`) that:
    - `Serial.begin(115200)`
    - Print IP address, connection status, and current lux values
 
-### Phase 2: Hardening & Calibration
+### Phase 2: Hardening & Calibration (in progress)
 
-1. **Sensor calibration**
+1. **Sensor calibration** ⬜
    - Compare CodeCell lux readings against a known lux meter or the TSL2591-based Lunar sensor.
    - The VCNL4040 has ±10% accuracy per datasheet. If readings are consistently offset, apply a scalar correction factor.
    - Consider using **White Light** (`Light_WhiteRead()`) instead of Ambient if the spectral response better matches typical monitor-room lighting (LED/office lights).
 
-2. **Connection resilience**
-   - Auto-reconnect Wi-Fi if the connection drops.
+2. **Connection resilience** 🔶 (partial)
+   - ~~Auto-reconnect Wi-Fi if the connection drops.~~ ✅ Implemented (`maintainWiFi()`).
    - Restart mDNS if needed.
    - Consider watchdog timer to reset the device if it hangs.
 
-3. **Power management**
-   - The CodeCell supports LiPo battery operation with charging.
+3. **Power management** 🔶 (partial)
+   - ✅ Implemented: CPU at 80 MHz, Wi-Fi modem sleep (`WiFi.setSleep(true)`), and `delay()` yields in the main and SSE loops so modem sleep can engage.
+   - Remaining: automatic light sleep (`esp_pm`) for low-mA idle.
    - If running on battery, consider using `SleepTimer()` to deep-sleep between readings and wake every 2 seconds to send an SSE update. Note: SSE requires a persistent TCP connection, so deep sleep is only viable if Lunar falls back to polling `/sensor/ambient_light`.
    - Lunar supports **Auto Mode** which falls back to other modes if the sensor is unavailable, so intermittent sensor availability is acceptable.
 
-4. **OTA updates**
+4. **OTA updates** ⬜
    - The Lunar firmware installer supports updating over-the-air using `lunarsensor.local`.
    - For our custom firmware, we can add ArduinoOTA or ESP32 HTTPUpdate support so the device can be reflashed without USB after initial programming.
 
@@ -201,17 +202,18 @@ Create a standalone Arduino sketch (`lunarsensor.ino`) that:
 
 ---
 
-## File Structure (Proposed)
+## File Structure
 
 ```
-/Users/mccoole/work/lunar-sensor/
+lunar-sensor/
+├── CLAUDE.md                 # Guidance for Claude Code sessions
+├── README.md                 # Build/flash instructions
 ├── RESEARCH_AND_PLAN.md      # This document
-├── firmware/
-│   ├── lunarsensor.ino       # Main Arduino sketch
-│   ├── secrets.h               # Wi-Fi credentials (gitignored)
-│   └── README.md             # Build/flash instructions
-└── extras/
-    └── calibration_notes.md
+├── platformio.ini            # PlatformIO config (pioarduino platform, arm64-native)
+└── src/
+    ├── lunarsensor.ino       # Main Arduino sketch
+    ├── secrets.h.template    # Wi-Fi credentials template
+    └── secrets.h             # Wi-Fi credentials (gitignored)
 ```
 
 ---
@@ -230,12 +232,9 @@ Create a standalone Arduino sketch (`lunarsensor.ino`) that:
 
 ## Next Steps
 
-1. **Write the PoC Arduino sketch** (`lunarsensor.ino`) using `WebServer` + `ESPmDNS` + `CodeCell.h`.
-2. **Flash to CodeCell C3** via Arduino IDE or PlatformIO.
-3. **Test endpoints** with `curl`:
-   ```bash
-   curl lunarsensor.local/sensor/ambient_light
-   curl -N lunarsensor.local/events
-   ```
-4. **Pair with Lunar app** — verify Sensor Mode appears and lux values track correctly.
+1. ~~**Write the PoC Arduino sketch** (`lunarsensor.ino`) using `WebServer` + `ESPmDNS` + `CodeCell.h`.~~ ✅
+2. ~~**Flash to CodeCell C3** via Arduino IDE or PlatformIO.~~ ✅
+3. ~~**Test endpoints** with `curl`.~~ ✅
+4. ~~**Pair with Lunar app** — verify Sensor Mode appears and lux values track correctly.~~ ✅
 5. **Calibrate** against a reference light meter or the official TSL2591 sensor.
+6. **Remaining Phase 2/3 items**: light sleep, watchdog, OTA updates, captive portal, config endpoint.

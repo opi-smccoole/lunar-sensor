@@ -18,6 +18,8 @@ You can build and flash this project using either **PlatformIO** (recommended) o
 - [PlatformIO Core](https://platformio.org/install) (CLI) or [PlatformIO IDE](https://platformio.org/install/ide) (VS Code extension)
 - `platformio.ini` at the project root already configures everything
 
+> **Note:** `platformio.ini` pins the [pioarduino](https://github.com/pioarduino/platform-espressif32) platform release instead of stock `espressif32`. This is deliberate: the stock platform ships x86_64-only compilers, which fail with `Bad CPU type in executable` on Apple Silicon Macs without Rosetta. pioarduino bundles the same Arduino core (3.2.0) with native arm64 toolchains — don't switch the `platform =` line back to `espressif32`.
+
 ### Option B: Arduino IDE
 
 - [Arduino IDE](https://www.arduino.cc/en/software) 1.8.x or 2.x
@@ -146,6 +148,16 @@ The VCNL4040 datasheet specifies ±10 % accuracy for ambient light readings. If 
   g_lux = raw * 0.1f;   // default: 1 count = 0.1 lux at 80 ms IT
   ```
 - You may also experiment with `Light_WhiteRead()` instead of `Light_AmbientRead()` if your room is primarily lit by LED or daylight sources.
+
+## Battery / Power
+
+The firmware is tuned for running on a LiPo battery:
+
+- CPU clocked at 80 MHz (half the ESP32-C3 default)
+- Wi-Fi modem sleep enabled (`WiFi.setSleep(true)`) — the radio sleeps between router beacons
+- The main loop and SSE loop idle in `delay()` between iterations, which is what allows modem sleep to engage
+
+The trade-off is a small amount of added latency: one-shot HTTP requests may take up to ~50 ms longer, and some routers add a beacon-interval delay when the modem is sleeping. This is imperceptible in normal Lunar use. If you are permanently USB-powered and want minimum latency instead, set `WiFi.setSleep(false)` in `setup()`.
 
 ## Troubleshooting
 
