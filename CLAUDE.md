@@ -34,7 +34,7 @@ Changing the hostname, port, paths, JSON field names, or event framing breaks Lu
 
 ## Architecture notes
 
-- The HTTP server is the synchronous `WebServer`; the SSE handler **blocks inside `handleEvents()`** for the lifetime of the client connection, running its own sensor-update/emit loop. The `g_sseActive` flag stops `loop()` from doing anything meanwhile. Only one SSE client is supported at a time; any work that must continue during streaming has to be called from inside that handler's loop too (as `updateSensor()` is).
+- The HTTP server is `ESPAsyncWebServer` (ESP32Async fork) with an `AsyncEventSource` for `/events`; multiple clients are supported concurrently. HTTP handlers run on the **async TCP task**, not in `loop()` — they must only format and send (no `delay()`, no I2C, no long work), or the watchdog resets the device. Sensor reads and the 2 s SSE emit both live in `loop()`. Note `AsyncEventSource` only claims requests carrying `Accept: text/event-stream` — a plain `curl /events` gets a 404; add `-H "Accept: text/event-stream"`.
 - Sensor reads go through `myCodeCell.Run(SAMPLE_HZ)`, which gates timing internally and returns true when a sample interval elapsed — call it frequently, don't add your own timing around it. Lux conversion is `raw * 0.1f` (VCNL4040 at 80 ms integration time).
 - Power management is deliberate and easy to regress: CPU pinned to 80 MHz, `WiFi.setSleep(true)`, and `delay()` yields in both `loop()` (50 ms) and the SSE loop (100 ms). The delays are what let Wi-Fi modem sleep engage — do not remove them or add busy-wait loops; battery runtime depends on it.
 

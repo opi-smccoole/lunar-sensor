@@ -200,7 +200,7 @@ Create a standalone Arduino sketch (`lunarsensor.ino`) that:
    - The CodeCell library already samples the battery inside `Run()` and exposes `BatteryVoltageRead()` (mV, filtered), `BatteryLevelRead()` (percent), and `PowerStateRead()` (battery / USB / charging / full / low) — reading them adds no extra sensor traffic.
    - Expose as `GET /sensor/battery_level` in the same JSON style as the light endpoint, e.g. `{"id":"sensor-battery_level","state":"87 %","value":87.0}`, with voltage and charge state as extra fields.
    - Do **not** add battery events to the `/events` SSE stream — its framing is part of the Lunar protocol contract.
-   - **Limitation:** with the current synchronous single-client `WebServer`, the endpoint is unreachable while Lunar holds the SSE stream open (i.e. almost always). Making it reachable requires either servicing requests from inside the SSE handler loop or the async-server refactor. A low-battery serial log line / LED blink works regardless of this limitation.
+   - ~~**Limitation:** with the synchronous single-client `WebServer`, the endpoint is unreachable while Lunar holds the SSE stream open.~~ ✅ Lifted by the async-server refactor (`ESPAsyncWebServer`): requests are served concurrently with active SSE streams.
    - LiPo percentage is unreliable in the flat middle of the discharge curve; report voltage + charge state alongside the percent.
 
 4. **Home Assistant compatibility**
