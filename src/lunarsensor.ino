@@ -17,6 +17,7 @@
   Required libraries (Arduino Library Manager):
     - CodeCell  (by Microbots)
     - ArduinoJson  (by Benoit Blanchon, v6.x)
+    - ESPAsyncWebServer + AsyncTCP  (ESP32Async forks)
 
   Board:
     ESP32C3 Dev Module  (Tools -> Board -> ESP32 Arduino)
@@ -27,7 +28,8 @@
 */
 
 #include <WiFi.h>
-#include <WebServer.h>
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
 #include <ESPmDNS.h>
 #include <ArduinoJson.h>
 #include <CodeCell.h>
@@ -42,16 +44,15 @@ static const uint16_t HTTP_PORT    = 80;
 static const uint8_t  SAMPLE_HZ    = 5;      // VCNL4040 sample rate
 static const uint16_t SSE_MS       = 2000;   // SSE emit interval
 static const uint16_t IDLE_MS      = 50;     // main-loop yield (lets Wi-Fi modem sleep)
-static const uint16_t SSE_IDLE_MS  = 100;    // SSE-loop yield between client checks
 
 // ---------------------------------------------------------------------------
 // Globals
 // ---------------------------------------------------------------------------
-CodeCell    myCodeCell;
-WebServer   server(HTTP_PORT);
-float       g_lux         = 400.0f;
-bool        g_sseActive   = false;
-uint16_t    g_lastProx    = 0;           // kept for future use
+CodeCell         myCodeCell;
+AsyncWebServer   server(HTTP_PORT);
+AsyncEventSource events("/events");
+float            g_lux      = 400.0f;
+uint16_t         g_lastProx = 0;         // kept for future use
 
 // ---------------------------------------------------------------------------
 // JSON helper
@@ -82,33 +83,24 @@ static void updateSensor() {
 // ---------------------------------------------------------------------------
 // HTTP handlers
 // ---------------------------------------------------------------------------
-static void handleAmbientLight() {
-  server.send(200, "application/json", luxJson());
-}
+// Handlers run on the async TCP task: format and send only — no delay(),
+// no I2C. Sensor reads stay in loop().
+static void setupHttp() {
+  server.on("/sensor/ambient_light", HTTP_GET, [](AsyncWebServerRequest* req) {
+    req->send(200, "application/json", luxJson());
+  });
 
-static void handleEvents() {
-  g_sseActive = true;
+  events.onConnect([](AsyncEventSourceClient* client) {
+    Serial.println("[LunarSensor] SSE client connected");
+    client->send(luxJson().c_str(), "state", millis());
+  });
+  server.addHandler(&events);
 
-  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-  server.send(200, "text/event-stream", "");
+  server.onNotFound([](AsyncWebServerRequest* req) {
+    req->send(404, "text/plain", "Not Found");
+  });
 
-  unsigned long lastSend = 0;
-
-  while (server.client().connected()) {
-    updateSensor();
-
-    if (millis() - lastSend >= SSE_MS) {
-      server.sendContent("event: state\ndata: " + luxJson() + "\n\n");
-      lastSend = millis();
-    }
-    delay(SSE_IDLE_MS);   // yield to Wi-Fi stack; emit interval is 2 s, no need to spin
-  }
-
-  g_sseActive = false;
-}
-
-static void handleNotFound() {
-  server.send(404, "text/plain", "Not Found");
+  server.begin();
 }
 
 // ---------------------------------------------------------------------------
@@ -177,11 +169,8 @@ void setup() {
     Serial.println("[LunarSensor] mDNS init failed");
   }
 
-  // HTTP routes
-  server.on("/sensor/ambient_light", HTTP_GET, handleAmbientLight);
-  server.on("/events",               HTTP_GET, handleEvents);
-  server.onNotFound(handleNotFound);
-  server.begin();
+  // HTTP routes (async server; handlers run on the TCP task)
+  setupHttp();
 
   Serial.println("[LunarSensor] Ready — waiting for Lunar app");
 }
@@ -190,10 +179,16 @@ void setup() {
 // Loop
 // ---------------------------------------------------------------------------
 void loop() {
-  if (!g_sseActive) {
-    updateSensor();
-    server.handleClient();
-    maintainWiFi();
-    delay(IDLE_MS);   // idle so modem sleep can engage; adds ≤50 ms request latency
+  static unsigned long lastSend = 0;
+
+  updateSensor();
+
+  if (millis() - lastSend >= SSE_MS) {
+    // Emitting with no clients connected is a no-op.
+    events.send(luxJson().c_str(), "state", millis());
+    lastSend = millis();
   }
+
+  maintainWiFi();
+  delay(IDLE_MS);   // idle so modem sleep can engage; adds ≤50 ms request latency
 }
