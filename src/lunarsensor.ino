@@ -41,6 +41,8 @@ static const char* SENSOR_HOSTNAME = "lunarsensor";
 static const uint16_t HTTP_PORT    = 80;
 static const uint8_t  SAMPLE_HZ    = 5;      // VCNL4040 sample rate
 static const uint16_t SSE_MS       = 2000;   // SSE emit interval
+static const uint16_t IDLE_MS      = 50;     // main-loop yield (lets Wi-Fi modem sleep)
+static const uint16_t SSE_IDLE_MS  = 100;    // SSE-loop yield between client checks
 
 // ---------------------------------------------------------------------------
 // Globals
@@ -99,7 +101,7 @@ static void handleEvents() {
       server.sendContent("event: state\ndata: " + luxJson() + "\n\n");
       lastSend = millis();
     }
-    delay(10);   // yield to Wi-Fi stack / watchdog
+    delay(SSE_IDLE_MS);   // yield to Wi-Fi stack; emit interval is 2 s, no need to spin
   }
 
   g_sseActive = false;
@@ -144,13 +146,19 @@ void setup() {
 
   Serial.println("\n[LunarSensor] Booting...");
 
+  // 80 MHz is plenty for a 5 Hz sensor + tiny HTTP server and roughly
+  // halves active CPU power vs the 160 MHz default.
+  setCpuFrequencyMhz(80);
+
   // Initialise light sensor
   myCodeCell.Init(LIGHT);
   myCodeCell.LED_SetBrightness(0);          // silence breathing LED
   Serial.println("[LunarSensor] VCNL4040 light sensor ready");
 
-  // Connect to Wi-Fi
+  // Connect to Wi-Fi. Modem power-save (DTIM sleep) keeps the radio off
+  // between beacons whenever the CPU idles in delay().
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  WiFi.setSleep(true);
   Serial.print("[LunarSensor] Joining Wi-Fi");
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -186,5 +194,6 @@ void loop() {
     updateSensor();
     server.handleClient();
     maintainWiFi();
+    delay(IDLE_MS);   // idle so modem sleep can engage; adds ≤50 ms request latency
   }
 }
