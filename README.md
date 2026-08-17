@@ -116,8 +116,11 @@ Test the endpoints from your Mac:
 # One-shot lux reading
 curl lunarsensor.local/sensor/ambient_light
 
+# Battery status (percent, voltage in mV, power state)
+curl lunarsensor.local/sensor/battery_level
+
 # SSE stream (press Ctrl+C to stop)
-curl -N lunarsensor.local/events
+curl -N -H "Accept: text/event-stream" lunarsensor.local/events
 ```
 
 Expected output:

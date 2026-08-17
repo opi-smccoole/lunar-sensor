@@ -18,7 +18,8 @@ There are no tests or linters. Verification is manual: watch the serial boot log
 
 ```bash
 curl lunarsensor.local/sensor/ambient_light   # one-shot JSON reading
-curl -N lunarsensor.local/events              # SSE stream, one event per 2 s
+curl lunarsensor.local/sensor/battery_level   # battery percent, mV, power state
+curl -N -H "Accept: text/event-stream" lunarsensor.local/events   # SSE stream, one event per 2 s
 ```
 
 Building requires `src/secrets.h` (gitignored) — copy `src/secrets.h.template` and fill in 2.4 GHz Wi-Fi credentials.
@@ -31,6 +32,8 @@ Lunar discovers the device via mDNS as `lunarsensor.local` on port 80 and expect
 - `GET /events` → SSE stream emitting `event: state` + the same JSON as `data:` every 2 s.
 
 Changing the hostname, port, paths, JSON field names, or event framing breaks Lunar pairing.
+
+`GET /sensor/battery_level` is ours, not part of the Lunar contract — it returns percent/`voltage_mv`/`power_state`, with percent only meaningful when `power_state` is a battery state (the CodeCell library returns sentinels 101/102 for charging/USB).
 
 ## Architecture notes
 
