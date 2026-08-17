@@ -44,6 +44,7 @@ static const uint16_t HTTP_PORT    = 80;
 static const uint8_t  SAMPLE_HZ    = 5;      // VCNL4040 sample rate
 static const uint16_t SSE_MS       = 2000;   // SSE emit interval
 static const uint16_t IDLE_MS      = 50;     // main-loop yield (lets Wi-Fi modem sleep)
+static const uint16_t BATT_MS      = 5000;   // battery sample interval
 
 // ---------------------------------------------------------------------------
 // Globals
@@ -54,6 +55,12 @@ AsyncEventSource events("/events");
 float            g_lux      = 400.0f;
 uint16_t         g_lastProx = 0;         // kept for future use
 
+// Battery snapshot, sampled in loop() (ADC + filter state are not safe to
+// touch from the async TCP task). Handlers read these, never the CodeCell API.
+uint8_t          g_battPct   = 0;
+uint16_t         g_battMv    = 0;
+uint8_t          g_battState = POWER_INIT;
+
 // ---------------------------------------------------------------------------
 // JSON helper
 // ---------------------------------------------------------------------------
@@ -62,6 +69,34 @@ static String luxJson() {
   doc["id"]    = "sensor-ambient_light";
   doc["state"] = String(g_lux, 1) + " lx";
   doc["value"] = g_lux;
+
+  String out;
+  serializeJson(doc, out);
+  return out;
+}
+
+static const char* powerStateName(uint8_t state) {
+  switch (state) {
+    case POWER_BAT_RUN:  return "battery";
+    case POWER_USB:      return "usb";
+    case POWER_BAT_LOW:  return "battery_low";
+    case POWER_BAT_FULL: return "battery_full";
+    case POWER_BAT_CHRG: return "charging";
+    default:             return "initializing";
+  }
+}
+
+static String batteryJson() {
+  // BatteryLevelRead() sentinels: 101 = charging, 102 = USB. The percent is
+  // only meaningful on battery; power_state carries the context otherwise.
+  float pct = (g_battPct > 100) ? 100.0f : (float)g_battPct;
+
+  StaticJsonDocument<256> doc;
+  doc["id"]          = "sensor-battery_level";
+  doc["state"]       = String(pct, 0) + " %";
+  doc["value"]       = pct;
+  doc["voltage_mv"]  = g_battMv;
+  doc["power_state"] = powerStateName(g_battState);
 
   String out;
   serializeJson(doc, out);
@@ -80,6 +115,21 @@ static void updateSensor() {
   }
 }
 
+static void updateBattery() {
+  static unsigned long lastSample = 0;
+  if (millis() - lastSample < BATT_MS && lastSample != 0) return;
+  lastSample = millis();
+
+  g_battMv    = myCodeCell.BatteryVoltageRead();
+  g_battPct   = myCodeCell.BatteryLevelRead();
+  uint8_t state = myCodeCell.PowerStateRead();
+
+  if (state == POWER_BAT_LOW && g_battState != POWER_BAT_LOW) {
+    Serial.printf("[LunarSensor] LOW BATTERY: %u mV\n", g_battMv);
+  }
+  g_battState = state;
+}
+
 // ---------------------------------------------------------------------------
 // HTTP handlers
 // ---------------------------------------------------------------------------
@@ -88,6 +138,10 @@ static void updateSensor() {
 static void setupHttp() {
   server.on("/sensor/ambient_light", HTTP_GET, [](AsyncWebServerRequest* req) {
     req->send(200, "application/json", luxJson());
+  });
+
+  server.on("/sensor/battery_level", HTTP_GET, [](AsyncWebServerRequest* req) {
+    req->send(200, "application/json", batteryJson());
   });
 
   events.onConnect([](AsyncEventSourceClient* client) {
@@ -182,6 +236,7 @@ void loop() {
   static unsigned long lastSend = 0;
 
   updateSensor();
+  updateBattery();
 
   if (millis() - lastSend >= SSE_MS) {
     // Emitting with no clients connected is a no-op.

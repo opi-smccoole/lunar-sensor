@@ -196,7 +196,7 @@ Create a standalone Arduino sketch (`lunarsensor.ino`) that:
    - `POST /config` to set lux scaling factor, sensor mode (ambient vs white), polling rate.
    - Persist settings to NVS.
 
-3. **Battery status endpoint**
+3. **Battery status endpoint** ✅ (implemented)
    - The CodeCell library already samples the battery inside `Run()` and exposes `BatteryVoltageRead()` (mV, filtered), `BatteryLevelRead()` (percent), and `PowerStateRead()` (battery / USB / charging / full / low) — reading them adds no extra sensor traffic.
    - Expose as `GET /sensor/battery_level` in the same JSON style as the light endpoint, e.g. `{"id":"sensor-battery_level","state":"87 %","value":87.0}`, with voltage and charge state as extra fields.
    - Do **not** add battery events to the `/events` SSE stream — its framing is part of the Lunar protocol contract.
@@ -244,4 +244,4 @@ lunar-sensor/
 3. ~~**Test endpoints** with `curl`.~~ ✅
 4. ~~**Pair with Lunar app** — verify Sensor Mode appears and lux values track correctly.~~ ✅
 5. **Calibrate** against a reference light meter or the official TSL2591 sensor.
-6. **Remaining Phase 2/3 items**: light sleep, watchdog, OTA updates, captive portal, config endpoint, battery status endpoint.
+6. **Remaining Phase 2/3 items**: light sleep, watchdog, OTA updates, captive portal, config endpoint.
