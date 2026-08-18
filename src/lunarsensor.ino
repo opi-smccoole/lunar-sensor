@@ -53,7 +53,6 @@ CodeCell         myCodeCell;
 AsyncWebServer   server(HTTP_PORT);
 AsyncEventSource events("/events");
 float            g_lux      = 400.0f;
-uint16_t         g_lastProx = 0;         // kept for future use
 
 // Battery snapshot, sampled in loop() (ADC + filter state are not safe to
 // touch from the async TCP task). Handlers read these, never the CodeCell API.
@@ -111,8 +110,21 @@ static void updateSensor() {
     // VCNL4040 default integration time = 80 ms -> 1 count = 0.1 lux
     uint16_t raw = myCodeCell.Light_AmbientRead();
     g_lux = raw * 0.1f;
-    g_lastProx = myCodeCell.Light_ProximityRead();
   }
+}
+
+// CodeCell's Light_Init() enables the VCNL4040 proximity channel with its IR
+// emitter at 200 mA / 1/40 duty (~5 mA average) — unused here, so shut it
+// down. ALS_CONF is a separate register; the ambient-light channel keeps
+// running. Must not be called after setup(): I2C stays off-limits to the
+// async TCP task, and LED brightness must stay 0 or LED_Breathing() would
+// poll the now-dormant proximity register.
+static void disableProximity() {
+  Wire.beginTransmission(VCNL4040_ADDRESS);
+  Wire.write(VCNL4040_PS_CONF1_REG);
+  Wire.write(0x01);  // PS_CONF1: PS_SD=1 (proximity shutdown)
+  Wire.write(0x00);  // PS_CONF2: defaults
+  Wire.endTransmission();
 }
 
 static void updateBattery() {
@@ -199,7 +211,8 @@ void setup() {
   // Initialise light sensor
   myCodeCell.Init(LIGHT);
   myCodeCell.LED_SetBrightness(0);          // silence breathing LED
-  Serial.println("[LunarSensor] VCNL4040 light sensor ready");
+  disableProximity();
+  Serial.println("[LunarSensor] VCNL4040 light sensor ready (proximity off)");
 
   // Connect to Wi-Fi. Modem power-save (DTIM sleep) keeps the radio off
   // between beacons whenever the CPU idles in delay().
