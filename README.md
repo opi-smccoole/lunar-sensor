@@ -158,6 +158,7 @@ The firmware is tuned for running on a LiPo battery:
 
 - CPU clocked at 80 MHz (half the ESP32-C3 default)
 - Wi-Fi modem sleep enabled (`WiFi.setSleep(true)`) — the radio sleeps between router beacons
+- The VCNL4040 proximity channel is shut down at boot — the CodeCell library otherwise leaves its 200 mA IR emitter pulsing at 1/40 duty (~5 mA average) for a reading this firmware doesn't use
 - The main loop and SSE loop idle in `delay()` between iterations, which is what allows modem sleep to engage
 
 The trade-off is a small amount of added latency: one-shot HTTP requests may take up to ~50 ms longer, and some routers add a beacon-interval delay when the modem is sleeping. This is imperceptible in normal Lunar use. If you are permanently USB-powered and want minimum latency instead, set `WiFi.setSleep(false)` in `setup()`.

@@ -177,7 +177,8 @@ Create a standalone Arduino sketch (`lunarsensor.ino`) that:
 
 3. **Power management** 🔶 (partial)
    - ✅ Implemented: CPU at 80 MHz, Wi-Fi modem sleep (`WiFi.setSleep(true)`), and `delay()` yields in the main and SSE loops so modem sleep can engage.
-   - Remaining: automatic light sleep (`esp_pm`) for low-mA idle.
+   - ✅ Implemented: VCNL4040 proximity channel shut down at boot (PS_SD=1) — CodeCell's `Light_Init()` otherwise runs the 200 mA IR emitter at 1/40 duty (~5 mA average) for an unused reading.
+   - Remaining: automatic light sleep (`esp_pm`) for low-mA idle. Blocked on the toolchain: the precompiled Arduino core ships with `CONFIG_PM_ENABLE` unset, so this needs a pioarduino hybrid build (`framework = arduino, espidf`) with a custom sdkconfig.
    - If running on battery, consider using `SleepTimer()` to deep-sleep between readings and wake every 2 seconds to send an SSE update. Note: SSE requires a persistent TCP connection, so deep sleep is only viable if Lunar falls back to polling `/sensor/ambient_light`.
    - Lunar supports **Auto Mode** which falls back to other modes if the sensor is unavailable, so intermittent sensor availability is acceptable.
 
